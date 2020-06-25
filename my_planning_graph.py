@@ -19,8 +19,18 @@ class ActionLayer(BaseActionLayer):
         --------
         layers.ActionNode
         """
-        # TODO: implement this function
-        raise NotImplementedError
+        #print("actionA effects: ", self.children[actionA])
+        #print("actionB effects: ", self.children[actionB])
+        effectsA = self.children[actionA]
+        negEffectsB = {~effect for effect in self.children[actionB]}
+
+        for effect in effectsA:
+            if(effect in negEffectsB):
+                return True
+        return False
+        #print("Self.children: {}".format(self.children))
+        #print("actionA effects: ", actionA.effects)
+        
 
 
     def _interference(self, actionA, actionB):
@@ -34,8 +44,22 @@ class ActionLayer(BaseActionLayer):
         --------
         layers.ActionNode
         """
-        # TODO: implement this function
-        raise NotImplementedError
+        effectsA = self.children[actionA]
+        effectsB = self.children[actionB]
+        negPrecondA = {~precond for precond in self.parents[actionA]}
+        negPrecondB = {~precond for precond in self.parents[actionB]}
+
+        for effect in effectsA:
+            if(effect in negPrecondB):
+                return True
+
+        for effect in effectsB:
+            if(effect in negPrecondA):
+                return True
+
+        return False
+
+        
 
     def _competing_needs(self, actionA, actionB):
         """ Return True if any preconditions of the two actions are pairwise mutex in the parent layer
@@ -49,8 +73,23 @@ class ActionLayer(BaseActionLayer):
         layers.ActionNode
         layers.BaseLayer.parent_layer
         """
-        # TODO: implement this function
-        raise NotImplementedError
+        precondsA = self.parents[actionA]
+        precondsB = self.parents[actionB]
+
+        #print(precondsA)
+        #print(precondsB)
+
+        for condA in precondsA:
+            for condB in precondsB:
+                #print("Pair: {}, {}".format(condA, condB))
+                #self.parent_layer is a Literal Layer:
+                #When printed: <my_planning_graph.LiteralLayer object at 0x7f97294f1cf8>
+                #found a function in the examples file
+                if(self.parent_layer.is_mutex(condA, condB)):
+                    return True
+
+        return False
+        
 
 
 class LiteralLayer(BaseLiteralLayer):
@@ -66,13 +105,23 @@ class LiteralLayer(BaseLiteralLayer):
         --------
         layers.BaseLayer.parent_layer
         """
-        # TODO: implement this function
-        raise NotImplementedError
+        actionsA = self.parents[literalA]
+        actionsB = self.parents[literalB]
+
+        #print("Actions leading to literal A: ", actionsA)
+
+        for actionA in actionsA:
+            for actionB in actionsB:
+                if(not self.parent_layer.is_mutex(actionA, actionB)):
+                    return False
+
+        return True
+        
 
     def _negation(self, literalA, literalB):
         """ Return True if two literals are negations of each other """
-        # TODO: implement this function
-        raise NotImplementedError
+        return literalA == ~literalB
+        
 
 
 class PlanningGraph:
@@ -110,6 +159,25 @@ class PlanningGraph:
         self.literal_layers = [layer]
         self.action_layers = []
 
+    def level_cost(self, goal):
+        """
+        The level cost is a helper function used by MaxLevel and LevelSum. 
+        The level cost of a goal is equal to the level number of the first 
+        literal layer in the planning graph where the goal literal appears.
+
+        params:
+        - goal: a literal that is a goal in the planning graph
+
+        returns:
+        - number of level on which
+        """
+        for i in range(len(self.literal_layers)):
+            if(goal in self.literal_layers[i]):
+                return i
+
+
+
+
     def h_levelsum(self):
         """ Calculate the level sum heuristic for the planning graph
 
@@ -135,8 +203,15 @@ class PlanningGraph:
         --------
         Russell-Norvig 10.3.1 (3rd Edition)
         """
-        # TODO: implement this function
-        raise NotImplementedError
+        costs = []
+        self.fill() #fill the planning graph until it levels off
+        #literals_lists = [list(layer.children.keys()) for layer in self.literal_layers]
+        #all_literals = [literal for l in literals_lists for literal in l] 
+
+        for goal in self.goal:
+            costs.append(self.level_cost(goal))
+        return sum(costs)
+        
 
     def h_maxlevel(self):
         """ Calculate the max level heuristic for the planning graph
@@ -165,8 +240,18 @@ class PlanningGraph:
         -----
         WARNING: you should expect long runtimes using this heuristic with A*
         """
-        # TODO: implement maxlevel heuristic
-        raise NotImplementedError
+        
+        costs = []
+        self.fill() #fill the planning graph until it levels off
+        #literals_lists = [list(layer.children.keys()) for layer in self.literal_layers]
+        #all_literals = {literal for l in literals_lists for literal in l} #using set to eliminate redundancies and reduce runtime.
+
+        #print("all_literals: ", all_literals)
+        for goal in self.goal:
+            costs.append(self.level_cost(goal))
+        
+        return max(costs)
+        
 
     def h_setlevel(self):
         """ Calculate the set level heuristic for the planning graph
@@ -190,8 +275,26 @@ class PlanningGraph:
         -----
         WARNING: you should expect long runtimes using this heuristic on complex problems
         """
-        # TODO: implement setlevel heuristic
-        raise NotImplementedError
+        self.fill() #fill the planning graph until it levels off
+
+        for i in range(len(self.literal_layers)):
+            all_goals_met = True
+            for goal in self.goal:
+                if(goal not in self.literal_layers[i]):
+                    all_goals_met = False
+            
+            if(not all_goals_met):
+                continue
+            
+            goals_are_mutex = False
+            for goalA in self.goal:
+                for goalB in self.goal:
+                    if(self.literal_layers[i].is_mutex(goalA, goalB)):
+                        goals_are_mutex = True
+        
+            if(not goals_are_mutex):
+                return i
+
 
     ##############################################################################
     #                     DO NOT MODIFY CODE BELOW THIS LINE                     #
